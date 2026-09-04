@@ -52,8 +52,12 @@ jobs:
           # pacman -U itself returns 0 even when a post-install scriptlet
           # (.install) fails, so also fail this step if pacman logged an
           # "error:" line - that's how a broken .install script shows up.
-          PKG=$(ls *.pkg.tar.*)
-          pacman -U --noconfirm "$PKG" 2>&1 | tee /tmp/pacman.log
+          # An array, not a single $(ls ...) string: makepkg can produce more
+          # than one artifact (e.g. a compiled build also gets an automatic
+          # -debug package), and passing them as one unquoted/unsplit string
+          # to pacman -U garbles the filename instead of installing both.
+          PKGS=(*.pkg.tar.*)
+          pacman -U --noconfirm "${PKGS[@]}" 2>&1 | tee /tmp/pacman.log
           ! grep -q '^error:' /tmp/pacman.log
 
       - name: Verify installed files are present
