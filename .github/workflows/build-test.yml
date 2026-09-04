@@ -1,0 +1,27 @@
+name: Build test
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  makepkg:
+    name: makepkg build
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - name: Install build dependencies
+        run: pacman -Syu --noconfirm --needed git unzip
+
+      - uses: actions/checkout@v4
+
+      - name: Build package as non-root user
+        run: |
+          useradd -m builder
+          chown -R builder:builder .
+          echo 'builder ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+          su builder -c 'makepkg -s --noconfirm --skippgpcheck'
+
+      - name: Verify a package artifact was produced
+        run: ls -la *.pkg.tar.*

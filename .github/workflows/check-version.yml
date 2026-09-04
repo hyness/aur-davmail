@@ -1,0 +1,66 @@
+name: Check for new upstream version
+
+on:
+  schedule:
+    - cron: '0 12 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check:
+    name: Check SourceForge for a newer release
+    runs-on: ubuntu-latest
+    outputs:
+      needs_update: ${{ steps.check.outputs.needs_update }}
+      current_version: ${{ steps.check.outputs.current_version }}
+      new_version: ${{ steps.check.outputs.new_version }}
+      new_rev: ${{ steps.check.outputs.new_rev }}
+      new_md5: ${{ steps.check.outputs.new_md5 }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: python3 scripts/check-version.py
+
+  bump-and-pr:
+    name: Bump PKGBUILD, regenerate .SRCINFO, open PR
+    needs: check
+    if: needs.check.outputs.needs_update == 'true'
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - name: Install tooling
+        run: |
+          pacman -Syu --noconfirm --needed git github-cli sudo
+
+      - uses: actions/checkout@v4
+
+      - name: Bump PKGBUILD
+        run: |
+          python3 scripts/bump-pkgbuild.py \
+            "${{ needs.check.outputs.new_version }}" \
+            "${{ needs.check.outputs.new_rev }}" \
+            "${{ needs.check.outputs.new_md5 }}"
+
+      - name: Regenerate .SRCINFO
+        run: |
+          useradd -m builder
+          chown -R builder:builder .
+          su builder -c 'makepkg --printsrcinfo > .SRCINFO'
+
+      - name: Open PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          BRANCH="update-${{ needs.check.outputs.new_version }}-${{ needs.check.outputs.new_rev }}"
+          git checkout -b "$BRANCH"
+          git add PKGBUILD .SRCINFO
+          git commit -m "Update to ${{ needs.check.outputs.new_version }}"
+          git push origin "$BRANCH" --force
+          gh pr create --title "Update to ${{ needs.check.outputs.new_version }}" \
+            --body "Automated bump from ${{ needs.check.outputs.new_version }} detected on SourceForge. Previous: ${{ needs.check.outputs.current_version }}." \
+            --head "$BRANCH" --base main || echo "PR already exists"
