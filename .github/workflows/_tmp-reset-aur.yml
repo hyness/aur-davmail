@@ -1,0 +1,31 @@
+name: TEMP - reset AUR master
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: Commit SHA to force master to
+        required: true
+
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
+
+      - name: Force-push target SHA to AUR master
+        env:
+          GIT_SSH_COMMAND: ssh -i /home/runner/.ssh/aur -o UserKnownHostsFile=/home/runner/.ssh/known_hosts
+        run: |
+          git remote add aur ssh://aur@aur.archlinux.org/davmail.git
+          git fetch aur master
+          git push aur ${{ inputs.target_sha }}:master --force
