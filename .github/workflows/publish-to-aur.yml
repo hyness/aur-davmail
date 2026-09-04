@@ -34,7 +34,7 @@ jobs:
           # publish commit on top of AUR's own (flat) history rather than
           # pushing this repo's tree (which has .github/ and scripts/).
           git checkout -b aur-sync aur/master
-          git checkout main -- PKGBUILD .SRCINFO davmail.install davmail.desktop davmail@.system_service davmail@.user_service .gitignore
+          git checkout main -- PKGBUILD .SRCINFO davmail.install davmail.desktop davmail@.system_service davmail@.user_service
 
           if git diff --cached --quiet; then
             echo "No package changes to publish"
