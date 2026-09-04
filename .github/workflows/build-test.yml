@@ -48,8 +48,13 @@ jobs:
           # No --nodeps: this is the point of the job. pacman must resolve
           # every declared `depends` entry against a clean system with
           # nothing pre-installed beyond `base`.
+          #
+          # pacman -U itself returns 0 even when a post-install scriptlet
+          # (.install) fails, so also fail this step if pacman logged an
+          # "error:" line - that's how a broken .install script shows up.
           PKG=$(ls *.pkg.tar.*)
-          pacman -U --noconfirm "$PKG"
+          pacman -U --noconfirm "$PKG" 2>&1 | tee /tmp/pacman.log
+          ! grep -q '^error:' /tmp/pacman.log
 
       - name: Verify installed files are present
         run: |
