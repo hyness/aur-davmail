@@ -1,4 +1,4 @@
-name: Build test
+name: Build and install test
 
 on:
   pull_request:
@@ -6,13 +6,13 @@ on:
   workflow_dispatch:
 
 jobs:
-  makepkg:
+  build:
     name: makepkg build
     runs-on: ubuntu-latest
     container: archlinux:base-devel
     steps:
       - name: Install build dependencies
-        run: pacman -Syu --noconfirm --needed git unzip
+        run: pacman -Syu --noconfirm --needed git unzip sudo
 
       - uses: actions/checkout@v4
 
@@ -25,3 +25,36 @@ jobs:
 
       - name: Verify a package artifact was produced
         run: ls -la *.pkg.tar.*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pkg
+          path: '*.pkg.tar.*'
+          retention-days: 1
+
+  install:
+    name: Install on a clean system
+    needs: build
+    runs-on: ubuntu-latest
+    container: archlinux:base
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pkg
+
+      - name: Update system and install the built package
+        run: |
+          pacman -Syu --noconfirm
+          # No --nodeps: this is the point of the job. pacman must resolve
+          # every declared `depends` entry against a clean system with
+          # nothing pre-installed beyond `base`.
+          PKG=$(ls *.pkg.tar.*)
+          pacman -U --noconfirm "$PKG"
+
+      - name: Verify installed files are present
+        run: |
+          test -f /usr/bin/davmail
+          test -f /usr/share/davmail/davmail.jar
+          test -f /usr/share/applications/davmail.desktop
+          test -f /usr/lib/systemd/system/davmail@.service
+          test -f /usr/lib/systemd/user/davmail@.service
