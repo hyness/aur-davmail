@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: write
 
 jobs:
   check:
@@ -53,6 +54,7 @@ jobs:
       - name: Open PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           git config --global --add safe.directory "$(pwd)"
           git config user.name "github-actions[bot]"
@@ -65,3 +67,9 @@ jobs:
           gh pr create --title "Update to ${{ needs.check.outputs.new_version }}" \
             --body "Automated bump from ${{ needs.check.outputs.new_version }} detected on SourceForge. Previous: ${{ needs.check.outputs.current_version }}." \
             --head "$BRANCH" --base main || echo "PR already exists"
+
+          # PRs opened with GITHUB_TOKEN never get their pull_request workflows
+          # run automatically (they sit at action_required), but
+          # workflow_dispatch from GITHUB_TOKEN is allowed and its check run
+          # attaches to the branch head, so it shows on the PR.
+          gh workflow run build-test.yml --ref "$BRANCH"
